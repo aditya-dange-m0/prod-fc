@@ -462,7 +462,7 @@ async def main():
     agno_file_logger.info("-" * 80)
 
     result1 = await agent_user1_projectA.arun(
-        "Can u check if the ripgrep fd-find packages are installed on the system? and if yes what is there version"
+        "Create a python fastapi server for testing create 3-4 test apis and reun this server and provide service url"
     )
     # "We have to test file search and content search using ripgrep fd-find and command tools (Install command: apt-get install -y ripgrep fd-find) and use command tools to test the ripgrep and fd-find do write multiple files but with minimal testable content for this ripgrep and content search test do not do long iteration testing"
     # "Can u create a folder temp-e2b and some python code in python such that after run that file using run command such that we can test the command tools and file tools both at same time"

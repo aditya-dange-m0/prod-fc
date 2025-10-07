@@ -256,7 +256,7 @@ class CommandTools(Toolkit):
         self.register(self.list_processes)
         self.register(self.kill_process)
         # self.register(self.send_stdin)
-        # self.register(self.get_service_url)
+        self.register(self.get_service_url)
         # self.register(self.stop_service)
         # self.register(self.list_services)
         # self.register(self.connect_to_process)
@@ -704,7 +704,7 @@ class CommandTools(Toolkit):
             self.logger.info(f"Getting public URL for port {port}")
 
             # Use E2B's get_host method (async for AsyncSandbox)
-            host = await sandbox.get_host(port)
+            host = sandbox.get_host(port)
             url = f"http://{host}"
 
             output = f"Public URL for port {port}:\n{url}\n"

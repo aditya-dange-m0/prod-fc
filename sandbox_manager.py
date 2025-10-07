@@ -20,8 +20,8 @@ from e2b.exceptions import (
 class SandboxConfig:
     """Configuration for sandbox creation"""
 
-    template: Optional[str] = None   # "next-fast-mongo-pre-v2"
-    timeout: int = 300
+    template: Optional[str] = "next-fast-mongo-pre-v2"   # "next-fast-mongo-pre-v2"
+    timeout: int = 500
     auto_pause: bool = True
     allow_internet_access: bool = True
     secure: bool = True
@@ -32,7 +32,7 @@ class SandboxConfig:
     max_total_sandboxes: int = 10
 
     # Cleanup settings
-    idle_timeout: int = 300  # 10 minutes
+    idle_timeout: int = 500  # 10 minutes
     max_sandbox_age: int = 900  # 1 hour
 
     # Retry configuration
@@ -140,16 +140,16 @@ class MultiTenantSandboxManager:
                     raise ValueError("E2B_API_KEY not set")
 
             # Use template from environment if not explicitly set
-            # if config.template is None:
-            #     config.template = os.getenv("E2B_TEMPLATE_ID")
-            #     if config.template:
-            #         self.logger.info(
-            #             f"Using E2B template from environment: {config.template}"
-            #         )
+            if config.template is None:
+                config.template = os.getenv("E2B_TEMPLATE_ID")
+                if config.template:
+                    self.logger.info(
+                        f"Using E2B template from environment: {config.template}"
+                    )
 
             self._config = config
             self.logger.info(
-                # f"Configuration: template={config.template or 'default'}, "
+                f"Configuration: template={config.template or 'default'}, "
                 f"max_per_user={config.max_sandboxes_per_user}, "
                 f"max_total={config.max_total_sandboxes}"
             )

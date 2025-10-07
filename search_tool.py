@@ -1,8 +1,11 @@
 import os
 import json
+import dotenv
+
 from parallel import Parallel
 from agno.tools import tool
 
+dotenv.load_dotenv()
 
 @tool
 def search_web(query: str) -> str:
