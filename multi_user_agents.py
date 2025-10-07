@@ -16,6 +16,8 @@ from file_tools_e2b import FileTools
 from sandbox_manager import get_multi_tenant_manager
 from command_tools_e2b import CommandTools
 from edit_tools_e2b import EditTools
+from search_tool import search_web
+
 
 
 dotenv.load_dotenv()
@@ -433,7 +435,7 @@ async def create_user_agent(user_id: str, project_id: str) -> Agent:
         description=BACKEND_DESCRIPTION,
         instructions=BACKEND_INSTRUCTIONS,
         expected_output=BACKEND_OUTPUT,
-        tools=[file_tools, command_tools, edit_tools],
+        tools=[file_tools, command_tools, edit_tools, search_web],
         exponential_backoff=True,
         retries=2,
         delay_between_retries=1,
