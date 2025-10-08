@@ -5,6 +5,7 @@ __pycache__/
 codeExplorationAgents/
 tmp/
 reports/
+test/
 # C extensions
 *.so
 

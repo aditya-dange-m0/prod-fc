@@ -18,6 +18,10 @@ from command_tools_e2b import CommandTools
 from edit_tools_e2b import EditTools
 from search_tool import search_web
 
+# Database imports
+from db import init_db, close_db
+from db.integration import get_or_create_session, end_session
+
 
 
 dotenv.load_dotenv()
@@ -449,6 +453,15 @@ async def create_user_agent(user_id: str, project_id: str) -> Agent:
 
 # Usage example
 async def main():
+    # Initialize database first
+    agno_file_logger.info("Initializing database connection...")
+    try:
+        await init_db(use_direct=False)  # Use pooled connection for application
+        agno_file_logger.info("✓ Database initialized successfully")
+    except Exception as e:
+        agno_file_logger.error(f"Failed to initialize database: {e}")
+        agno_file_logger.warning("Continuing without database tracking...")
+    
     # Add logging at the start
     agno_file_logger.info("=" * 80)
     agno_file_logger.info("STARTING MULTI-USER AGENT TEST SESSION")
@@ -460,9 +473,12 @@ async def main():
 
     agno_file_logger.info("Starting agent execution with command/file tools test")
     agno_file_logger.info("-" * 80)
+    
+    # Note: Session will be auto-created by FileTools/EditTools when they track files
+    # No need to pre-create session here - let the tools handle it automatically
 
     result1 = await agent_user1_projectA.arun(
-        "Create a python fastapi server for testing create 3-4 test apis and reun this server and provide service url"
+        "Create a python fastapi server for testing create 3-4 test apis and run this server and provide service url"
     )
     # "We have to test file search and content search using ripgrep fd-find and command tools (Install command: apt-get install -y ripgrep fd-find) and use command tools to test the ripgrep and fd-find do write multiple files but with minimal testable content for this ripgrep and content search test do not do long iteration testing"
     # "Can u create a folder temp-e2b and some python code in python such that after run that file using run command such that we can test the command tools and file tools both at same time"
@@ -485,9 +501,15 @@ async def main():
     print(f"Unique users: {stats['unique_users']}")  # Should be 2
     print(f"Distribution: {stats['user_distribution']}")
 
+    
     agno_file_logger.info("=" * 80)
     agno_file_logger.info("TEST SESSION COMPLETED")
     agno_file_logger.info("=" * 80)
+    
+    # Cleanup database connections
+    agno_file_logger.info("Closing database connections...")
+    await close_db()
+    agno_file_logger.info("✓ Database closed")
 
 
 if __name__ == "__main__":

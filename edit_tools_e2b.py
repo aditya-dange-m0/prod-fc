@@ -28,6 +28,9 @@ from agno.tools import tool, Toolkit
 
 from sandbox_manager import get_user_sandbox
 
+from db.session import get_db_session
+from db.repositories import FileRepository, ProjectRepository
+
 
 # =============================================================================
 # TYPE DEFINITIONS AND ENUMS
@@ -290,6 +293,7 @@ class EditTools(Toolkit):
         user_id: str = "adi_001",
         project_id: str = "base_001",
         default_encoding: str = "utf-8",
+        enable_db_tracking: bool = True,
         **kwargs,
     ):
         """
@@ -299,11 +303,13 @@ class EditTools(Toolkit):
             user_id: User identifier for multi-tenant isolation
             project_id: Project identifier for multi-tenant isolation
             default_encoding: Default text encoding
+            enable_db_tracking: Enable database tracking of edit operations
             **kwargs: Additional arguments passed to Toolkit
         """
         self.user_id = user_id
         self.project_id = project_id
         self.default_encoding = default_encoding
+        self.enable_db_tracking = enable_db_tracking
         self.logger = setup_logger(f"{__name__}.EditTools")
         
         super().__init__(name="edit_toolkit")
@@ -311,8 +317,57 @@ class EditTools(Toolkit):
         self.register(self.smart_edit_file)
         
         self.logger.info(
-            f"EditTools initialized for user={user_id}, project={project_id}"
+            f"EditTools initialized for user={user_id}, project={project_id}, db_tracking={enable_db_tracking}"
         )
+    
+    async def _persist_file_to_db(self, path: str, content: str, tool_name: str):
+        """
+        Internal method to persist file changes to database.
+        Called automatically after successful edit operations.
+        """
+        if not self.enable_db_tracking:
+            return
+        
+        try:
+            async with get_db_session() as session:
+                file_repo = FileRepository(session)
+                project_repo = ProjectRepository(session)
+                
+                # Ensure user exists
+                from sqlalchemy import select
+                from db.models import User
+                
+                stmt = select(User).where(User.id == self.user_id)
+                result = await session.execute(stmt)
+                user = result.scalar_one_or_none()
+                
+                if not user:
+                    user = User(
+                        id=self.user_id,
+                        email=f"{self.user_id}@system.local",
+                        username=self.user_id
+                    )
+                    session.add(user)
+                    await session.flush()
+                
+                # Ensure project exists
+                await project_repo.get_or_create_project(
+                    user_id=self.user_id,
+                    project_id=self.project_id
+                )
+                
+                # Save file version
+                await file_repo.save_file_version(
+                    project_id=self.project_id,
+                    file_path=path,
+                    content=content,
+                    created_by_tool=tool_name
+                )
+                
+                self.logger.debug(f"Persisted {path} to database")
+        except Exception as e:
+            self.logger.error(f"Failed to persist {path} to database: {e}")
+            # Don't raise - file edit already succeeded in sandbox
     
     # =========================================================================
     # CORE EDIT OPERATIONS
@@ -359,6 +414,9 @@ class EditTools(Toolkit):
             if is_new_file:
                 try:
                     await sandbox.files.write(path, new_string)
+                    
+                    # Persist to database
+                    await self._persist_file_to_db(path, new_string, "edit_file")
                     
                     return f"""✅ Created new file: {path}
 📄 Content: {len(new_string)} characters, {len(new_string.splitlines())} lines"""
@@ -450,6 +508,9 @@ class EditTools(Toolkit):
             try:
                 await sandbox.files.write(path, final_content)
                 
+                # Persist to database
+                await self._persist_file_to_db(path, final_content, "edit_file")
+                
                 # Generate diff
                 import os
                 filename = os.path.basename(path)
@@ -531,6 +592,9 @@ class EditTools(Toolkit):
             if is_new_file:
                 try:
                     await sandbox.files.write(path, new_string)
+                    
+                    # Persist to database
+                    await self._persist_file_to_db(path, new_string, "smart_edit_file")
                     
                     return f"""✅ Created new file: {path}
 📝 Instruction: {instruction}
@@ -630,6 +694,9 @@ class EditTools(Toolkit):
             try:
                 await sandbox.files.write(path, final_content)
                 
+                # Persist to database
+                await self._persist_file_to_db(path, final_content, "smart_edit_file")
+                
                 # Generate diff
                 import os
                 filename = os.path.basename(path)
@@ -667,6 +734,28 @@ class EditTools(Toolkit):
             self.logger.error(f"Unexpected error in smart_edit_file: {e}")
             return f"❌ Error in smart_edit_file: {str(e)}"
 
+    # async def _persist_file_to_db(self, path: str, content: str, tool_name: str):
+    #     """Persist edited file to database"""
+    #     try:
+    #         async with get_db_session() as session:
+    #             file_repo = FileRepository(session)
+    #             project_repo = ProjectRepository(session)
+                
+    #             await project_repo.get_or_create_project(
+    #                 user_id=self.user_id,
+    #                 project_id=self.project_id
+    #             )
+                
+    #             await file_repo.save_file_version(
+    #                 project_id=self.project_id,
+    #                 file_path=path,
+    #                 content=content,
+    #                 created_by_tool=tool_name
+    #             )
+                
+    #             self.logger.info(f"Persisted edit of {path} to database")
+    #     except Exception as e:
+    #         self.logger.error(f"Failed to persist edit to database: {e}")
 
 # =============================================================================
 # USAGE EXAMPLE

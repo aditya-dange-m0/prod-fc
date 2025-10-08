@@ -26,6 +26,9 @@ import logging
 from e2b import AsyncSandbox
 from agno.tools import tool, Toolkit
 
+from db.session import get_db_session
+from db.repositories import FileRepository, ProjectRepository
+
 from sandbox_manager import get_user_sandbox
 
 # =============================================================================
@@ -168,15 +171,18 @@ class FileTools(Toolkit):
         project_id: str = "default_base_001",
         max_file_size: int = 50 * 1024 * 1024,  # 50MB default
         default_encoding: str = "utf-8",
+        enable_db_tracking: bool = True,
         **kwargs,
     ):
         """
         Initialize FileToolkit with E2B sandbox.
 
         Args:
-            sandbox: E2B AsyncSandbox instance
+            user_id: User identifier for sandbox management
+            project_id: Project identifier for sandbox management
             max_file_size: Maximum file size for operations in bytes
             default_encoding: Default text encoding
+            enable_db_tracking: Enable database tracking of file operations
             **kwargs: Additional arguments passed to Toolkit
         """
         # Store sandbox and configuration
@@ -184,6 +190,7 @@ class FileTools(Toolkit):
         self.project_id = project_id
         self.max_file_size = max_file_size
         self.default_encoding = default_encoding
+        self.enable_db_tracking = enable_db_tracking
         self.logger = setup_logger(f"{__name__}.FileToolkit")
 
         # Initialize the Toolkit with all tool methods
@@ -344,6 +351,8 @@ class FileTools(Toolkit):
             write_info = await sandbox.files.write(
                 path=path, data=content, request_timeout=timeout
             )
+            
+            await self._persist_file_to_db(path, content, "write_file")
 
             # Calculate metrics
             line_count = len(content.splitlines())
@@ -652,6 +661,54 @@ class FileTools(Toolkit):
             )
         return await self.delete_path(path, force=False)
 
+    async def _persist_file_to_db(self, path: str, content: str, tool_name: str):
+        """
+        Internal method to persist file changes to database.
+        Called automatically after successful file operations.
+        """
+        if not self.enable_db_tracking:
+            return
+        
+        try:
+            async with get_db_session() as session:
+                file_repo = FileRepository(session)
+                project_repo = ProjectRepository(session)
+                
+                # Ensure user exists
+                from sqlalchemy import select
+                from db.models import User
+                
+                stmt = select(User).where(User.id == self.user_id)
+                result = await session.execute(stmt)
+                user = result.scalar_one_or_none()
+                
+                if not user:
+                    user = User(
+                        id=self.user_id,
+                        email=f"{self.user_id}@system.local",
+                        username=self.user_id
+                    )
+                    session.add(user)
+                    await session.flush()
+                
+                # Ensure project exists
+                await project_repo.get_or_create_project(
+                    user_id=self.user_id,
+                    project_id=self.project_id
+                )
+                
+                # Save file version
+                await file_repo.save_file_version(
+                    project_id=self.project_id,
+                    file_path=path,
+                    content=content,
+                    created_by_tool=tool_name
+                )
+                
+                self.logger.debug(f"Persisted {path} to database")
+        except Exception as e:
+            self.logger.error(f"Failed to persist {path} to database: {e}")
+            # Don't raise - file write already succeeded in sandbox
 
 if __name__ == "__main__":
     print("FileTools v1 - Enhanced E2B Sandbox File Operations")
